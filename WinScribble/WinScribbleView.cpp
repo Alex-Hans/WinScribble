@@ -14,6 +14,7 @@
 
 #include "Gdiplus.h"
 
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -523,6 +524,40 @@ int CWinScribbleView::GetEncoderClsid(const WCHAR * format, CLSID * pClsid)
 	}
 }
 
+void CWinScribbleView::DisplayImage(IplImage * img, HDC & hDC, CvRect & rDst, CvRect & rSrc)
+{
+	int bpp = ((img->depth) & 255)*(img->nChannels);
+
+	BYTE buffer[sizeof(BITMAPINFOHEADER) + 1024] = { 0 };
+	BITMAPINFO*       pbmi = (BITMAPINFO*)buffer;
+	BITMAPINFOHEADER* pbmih = &(pbmi->bmiHeader);
+
+	memset(pbmih, 0, sizeof(BITMAPINFOHEADER));
+	pbmih->biSize = sizeof(BITMAPINFOHEADER);
+	pbmih->biWidth = img->width;
+	pbmih->biHeight = (img->origin ? 1 : -1)*fabs(img->height);
+	pbmih->biPlanes = 1;
+	pbmih->biBitCount = (unsigned short)bpp;
+	pbmih->biCompression = BI_RGB;
+
+	if (bpp == 8)
+	{
+		RGBQUAD* palette = pbmi->bmiColors;
+
+		for (int i = 0; i < 256; i++)
+		{
+			palette[i].rgbRed = palette[i].rgbGreen =
+				palette[i].rgbBlue = (BYTE)i;
+			palette[i].rgbReserved = 0;
+		}
+	}
+
+	SetDIBitsToDevice(hDC, rDst.x, rDst.y, rDst.width, rDst.height,
+		rSrc.x, rSrc.y, rSrc.y, rSrc.height,
+		img->imageData + rSrc.y*img->widthStep,
+		pbmi, DIB_RGB_COLORS);
+}
+
 void CWinScribbleView::CreateStretchImage(CImage * pImage, CImage * ResultImage, int StretchHeight, int StretchWidth)
 {
 	if (pImage->IsDIBSection())
@@ -832,6 +867,7 @@ void CWinScribbleView::OnMouseMove(UINT nFlags, CPoint point)
 			dc.Rectangle(CRect(m_StartPoint, point));
 			m_StopPoint = point;
 			
+
 			break;
 		case 2:  //Ellipse  
 			::SetCursor(m_HCross);
@@ -1111,6 +1147,8 @@ void CWinScribbleView::OnImageImagetranslation()
 	// TODO: Add your command handler code here
 	ImageDlg dlg;
 	CDC*pDC = GetDC();
+	HDC hdc;
+	hdc = ::GetDC(m_hWnd);
 	if (dlg.DoModal()==IDOK)
 	{
 		double PA;//π
@@ -1131,13 +1169,23 @@ void CWinScribbleView::OnImageImagetranslation()
 		int temp = _ttoi(dlg.m_turnAngle);
 		if (temp != 0)
 		{
+			CRect rect;
+			GetClientRect(&rect);
+			CvRect cvrect(0, 0, img.width, img.height);
+			
+			
 			IplImage *dst = 0;
 			double degree;//角度
 			degree = PA*_ttoi(dlg.m_turnAngle) / 180;
 			CImageToMat(image, pic);
 			img = pic;//Mat to IplImage
 			dst=rotateImage(&img, temp, true);
-			cvShowImage("旋转后的图像", dst);
+			
+			Mat tmp= cv::cvarrToMat(dst);//IplImage * 转Mat
+			MatToCImage(tmp, image);
+			image.Draw(pDC->GetSafeHdc(), picX, picY);
+			Invalidate();					
+			
 		}
 	}
 }
@@ -1152,7 +1200,7 @@ void CWinScribbleView::OnImageGrayimage()
 	}
 	cvtColor(pic, pic, CV_BGR2GRAY);
 	MatToCImage(pic, image);
-	Invalidate();
+//	Invalidate();
 }
 
 //高斯平滑

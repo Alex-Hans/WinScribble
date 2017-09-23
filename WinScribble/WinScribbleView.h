@@ -106,8 +106,10 @@ private:
 	int picY;//图像左上纵坐标
 	BOOL m_drag;//拖放
 	IplImage  img;
-	IplImage* rotateImage(IplImage* src, int angle, bool clockwise);
+	IplImage* rotateImage(IplImage* src, int angle, bool clockwise);//旋转图片的函数
 	int GetEncoderClsid(const WCHAR* format, CLSID* pClsid);//图片编码
+
+	void DisplayImage(IplImage* img, HDC &hDC, CvRect &rDst, CvRect &rSrc);//显示旋转后的图片
 
 	void CreateStretchImage(CImage *pImage, CImage *ResultImage, int StretchHeight, int StretchWidth);//缩放
 //	void reateStretchBmp(CBitmap* pBitmap, int StretchHeight, int StretchWidth, CBitmap *pResultBmp);//
