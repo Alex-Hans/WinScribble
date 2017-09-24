@@ -96,6 +96,7 @@ CWinScribbleView::CWinScribbleView()
 	m_isGaussianblur = FALSE;
 	ksize1 = 3;
 	ksize2 = 3;
+	childMode = -1;//初始化一个值用来拖放图片
 }
 
 CWinScribbleView::~CWinScribbleView()
@@ -135,7 +136,7 @@ void CWinScribbleView::OnDraw(CDC* pDC)
 	switch (m_drawFlag)
 	{
 	case 4:		//Dot
-		MemDC.SetPixel(m_StopPoint, RGB(0, 0, 0));
+		MemDC.SetPixel(m_StopPoint, m_lineColor);
 
 		break;
 	case 0:		//Line
@@ -500,7 +501,7 @@ int CWinScribbleView::GetEncoderClsid(const WCHAR * format, CLSID * pClsid)
 
 	ImageCodecInfo* pImageCodecInfo = NULL;
 
-	GetImageEncodersSize(&num, &size);
+	Gdiplus::GetImageEncodersSize(&num, &size);
 	if (size == 0)
 	{
 		return -1;
@@ -511,7 +512,7 @@ int CWinScribbleView::GetEncoderClsid(const WCHAR * format, CLSID * pClsid)
 		return -1;
 	}
 
-	GetImageEncoders(num, size, pImageCodecInfo);
+	Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
 
 	for (UINT j = 0; j < num; ++j)
 	{
@@ -632,17 +633,22 @@ void CWinScribbleView::OnLButtonDown(UINT nFlags, CPoint point)
 	}
 		
 	m_StartPoint = point; //鼠标此时的坐标点
-	m_StopPoint = point;
-	//图像大小
+	m_StopPoint = m_StartPoint;
 
+
+	//拖动图片
 	if (!image.IsNull())
 	{
-		int height = image.GetHeight();
-		int width = image.GetWidth();
-		if (m_StartPoint.x > width&&m_StartPoint.y > height)
-			m_drag = FALSE;
-		else
+		CPoint move;
+		move.x = point.x - m_StartPoint.x;
+		move.y = point.y - m_StartPoint.y;
+
+		int height = image.GetHeight() + move.y;
+		int width = image.GetWidth() + move.x;
+		if (move.x<=m_StartPoint.x &&m_StartPoint.x <= width&&move.y<=m_StartPoint.y&& m_StartPoint.y <= height&&childMode==-1)
 			m_drag = TRUE;
+		else
+			m_drag = FALSE;
 
 	}
 
@@ -791,13 +797,21 @@ void CWinScribbleView::OnLButtonUp(UINT nFlags, CPoint point)
 	}
 
 	//鼠标拖动图片
-/*	if (m_drag)
+	if (m_drag)
 	{
-		picX += m_StopPoint.x - m_StartPoint.x;
-		picY += m_StopPoint.y - m_StartPoint.y;
+		if (point.x > m_StartPoint.x)
+		{
+			picX += point.x - m_StartPoint.x;
+			picY += point.y - m_StartPoint.y;
+		}
+		else
+		{
+			picX = m_StartPoint.x - point.x;
+			picY = m_StartPoint.y - point.y;
+		}
 		image.Draw(pDC->GetSafeHdc(), picX, picY);
 		Invalidate();
-	}*/
+	}
 
 	CView::OnLButtonUp(nFlags, point);
 
@@ -900,8 +914,8 @@ void CWinScribbleView::OnMouseMove(UINT nFlags, CPoint point)
 	//显示鼠标坐标
 	CString str;
 	str.Format(_T(" (%d, %d)"), point.x, point.y);    //格式化坐标值  
-
 	GetParent()->GetDescendantWindow(AFX_IDW_STATUS_BAR)->SetWindowText(str);
+
 	CView::OnMouseMove(nFlags, point);
 }
 
@@ -1106,7 +1120,7 @@ void CWinScribbleView::OnImageSaveiamge()
 	CDC* pDC = GetDC();
 	CRect rect;
 	this->GetClientRect(&rect);
-
+	//图片的大小
 	int nWidth = image.GetWidth();
 	int nHeight = image.GetHeight();
 	CBitmap MemBitmap1;
@@ -1241,7 +1255,116 @@ void CWinScribbleView::OnWidthLine()
 void CWinScribbleView::OnFileSaveAs()
 {
 	// TODO: Add your command handler code here
-	LPCTSTR lpszFilter = _T("BMP Files(*.bmp)|*.bmp|JPG Files(*.jpg)|*.bmp|JPEG Files(*.jpeg)|*.jpeg|PNG Files(*.png)|*.bmp|");
+	CClientDC dc(this);
+
+	CRect rect;
+
+	BOOL  showMsgTag;                  //是否要弹出”图像保存成功对话框"   
+
+	GetClientRect(&rect);                  //获取画布大小  
+
+	HBITMAP hbitmap = CreateCompatibleBitmap(dc, rect.right - rect.left, rect.bottom - rect.top);
+
+	//创建兼容位图  
+
+	HDC hdc = CreateCompatibleDC(dc);      //创建兼容DC，以便将图像保存为不同的格式  
+
+	HBITMAP hOldMap = (HBITMAP)SelectObject(hdc, hbitmap);
+
+	//将位图选入DC，并保存返回值   
+
+	BitBlt(hdc, 0, 0, rect.right - rect.left, rect.bottom - rect.top, dc, 0, 0, SRCCOPY);
+
+	//将屏幕DC的图像复制到内存DC中  
+
+
+
+	CImage image;
+
+	image.Attach(hbitmap);                //将位图转化为一般图像  
+
+	showMsgTag = TRUE;
+
+	CString  strFilter = _T("BMP Files(*.bmp)|*.bmp|JPG Files(*.jpg)|*.bmp|JPEG Files(*.jpeg)|*.jpeg|PNG Files(*.png)|*.bmp|");
+
+	CFileDialog dlg(FALSE, _T("bmp"), _T("iPaint.bmp"), NULL, strFilter);
+
+	if (dlg.DoModal() != IDOK)
+
+		return;
+
+
+	CString saveFilePath;
+	CString strFileName;          //如果用户没有指定文件扩展名，则为其添加一个  
+
+	CString strExtension;
+
+	strFileName = dlg.m_ofn.lpstrFile;
+
+	if (dlg.m_ofn.nFileExtension = 0)               //扩展名项目为0  
+
+	{
+
+		switch (dlg.m_ofn.nFilterIndex)
+
+		{
+
+		case 1:
+
+			strExtension = "bmp"; break;
+
+		case 2:
+
+			strExtension = "jpg"; break;
+
+		case 3:
+
+			strExtension = "gif"; break;
+
+		case 4:
+
+			strExtension = "png"; break;
+
+		default:
+
+			break;
+
+		}
+
+		strFileName = strFileName + "." + strExtension;
+
+	}
+
+	saveFilePath = strFileName;     //saveFilePath为视类中的全局变量,类型为CString  
+
+									//AfxMessageBox(saveFilePath);               //显示图像保存的全路径(包含文件名)  
+
+	HRESULT hResult = image.Save(saveFilePath);     //保存图像  
+
+	if (FAILED(hResult))
+
+	{
+
+		MessageBox(_T("保存图像文件失败！"));
+
+	}
+
+	else
+
+	{
+
+		if (showMsgTag)
+
+			MessageBox(_T("文件保存成功！"));
+
+	}
+
+	image.Detach();
+
+	SelectObject(hdc, hOldMap);
+
+
+/*	LPCTSTR lpszFilter = _T("BMP Files(*.bmp)|*.bmp|JPG Files(*.jpg)|*.bmp|JPEG Files(*.jpeg)|*.jpeg|PNG Files(*.png)|*.bmp|");
 	CFileDialog  dlg(FALSE, lpszFilter, NULL, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, lpszFilter, NULL);
 
 	CDC* pDC = GetDC();
@@ -1277,7 +1400,8 @@ void CWinScribbleView::OnFileSaveAs()
 	else if (fileExt == _T("png"))GetEncoderClsid(L"image/png", &Clsid);
 	bm.Save(pBuf, &Clsid, NULL);
 	filepath.ReleaseBuffer(filepath.GetLength());
-	ReleaseDC(pDC);
+	ReleaseDC(pDC);*/
+
 }
 
 //缩放图片
