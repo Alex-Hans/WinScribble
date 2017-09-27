@@ -1214,7 +1214,7 @@ void CWinScribbleView::OnImageGrayimage()
 	}
 	cvtColor(pic, pic, CV_BGR2GRAY);
 	MatToCImage(pic, image);
-//	Invalidate();
+	Invalidate();
 }
 
 //¸ßË¹Æ½»¬
@@ -1231,7 +1231,6 @@ void CWinScribbleView::OnImageGausssmooth()
 		CImageToMat(image, pic);
 		Mat dst;
 		GaussianBlur(pic, dst, cv::Size(ksize1, ksize2), 0, 0);
-
 		MatToCImage(dst, gausspic);
 		gausspic.Draw(pDC->GetSafeHdc(), picX, picY);
 	}
